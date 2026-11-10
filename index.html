@@ -187,13 +187,15 @@
             box-sizing: border-box;
         }
 
-        /* 紙面フォントの明示（継承まかせにしない）
-           ゴシック体は指定箇所（表の見出し・元号・西暦・注記）だけ。
-           それ以外の紙面要素はすべて明朝体を要素ごとに明示する。 */
-        .a5-page .header-area, .a5-page .main-title, .a5-page .ym-block, .a5-page .legend,
-        .a5-page .header-right, .a5-page .age-table td, .a5-page .cell-age, .a5-page .cell-zodiac,
-        .a5-page .section-title, .a5-page .vertical-list {
-            font-family: var(--paper-font);
+        /* 紙面フォントの最終指定
+           ブラウザ側でフォントを一律に上書きする機能（拡張機能など）が
+           Webページにだけ効いている環境があるため、紙面の全要素に
+           !important で明示する。ゴシック体は指定箇所だけ。 */
+        .a5-page, .a5-page * {
+            font-family: var(--paper-font) !important;
+        }
+        .a5-page .age-table th, .a5-page .cell-era, .a5-page .cell-year, .a5-page .table-note {
+            font-family: var(--gothic-font) !important;
         }
 
         /* --- 左ページ：ヘッダー --- */
