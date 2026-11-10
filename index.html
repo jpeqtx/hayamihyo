@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>満年齢早見表作成機</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ==========================================
+           UI / UX デザイン
+           ========================================== */
+        :root {
+            --bg-color: #f4f6f8;
+            --panel-bg: #ffffff;
+            --text-main: #000000;
+            --text-muted: #555555;
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --border-color: #e5e7eb;
+            
+            --paper-font: "Noto Serif JP", "Yu Mincho", "Hiragino Mincho ProN", serif;
+            --title-size: 26pt;
+        }
+
+        html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: "Noto Sans JP", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- サイドバー --- */
+        .sidebar {
+            width: 320px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 30px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            z-index: 10;
+            flex-shrink: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .header h1 { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; }
+        .header p { font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; }
+
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .control-group label { font-size: 0.85rem; font-weight: 700; }
+        .control-group select {
+            width: 100%; padding: 12px; border: 1px solid var(--border-color);
+            border-radius: 8px; font-size: 1rem; font-family: inherit;
+            background-color: #fafafa; cursor: pointer;
+        }
+
+        .btn-print {
+            margin-top: auto; width: 100%; padding: 16px; background-color: var(--primary-color);
+            color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 700;
+            cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+        .btn-print:hover { background-color: var(--primary-hover); }
+
+        .control-group input[type="file"] { font-size: 0.8rem; font-family: inherit; }
+        .btn-sub {
+            width: 100%; padding: 10px; background: #fff; color: var(--text-main);
+            border: 1px solid var(--border-color); border-radius: 8px;
+            font-size: 0.85rem; font-family: inherit; cursor: pointer;
+        }
+        .btn-sub:hover { background: #f0f0f0; }
+        .btn-sub[hidden] { display: none; }
+        .field-note { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
+
+        /* --- プレビューエリア --- */
+        .preview-area {
+            flex: 1;
+            position: relative;
+            background-color: #e5e7eb;
+            overflow: hidden;
+        }
+
+        /* スクロール領域：Fit以上の倍率で、はみ出した分だけ縦横スクロールバーが出る */
+        .preview-scroll {
+            position: absolute;
+            inset: 0;
+            overflow: auto;
+            display: flex;
+            touch-action: pan-x pan-y;      /* 1本指は標準スクロール、2本指ピンチは独自ズーム */
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* 拡大後の寸法を確保するステージ（余白は自動センタリング） */
+        .paper-stage {
+            margin: auto;
+            flex: 0 0 auto;
+            position: relative;
+        }
+
+        .paper-wrapper {
+            position: absolute;
+            left: 20px;
+            top: 20px;
+            transform-origin: 0 0;
+            transform: scale(var(--zoom, 1));
+        }
+
+        /* --- ズームコントロール --- */
+        .zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            z-index: 100;
+        }
+
+        .zoom-controls button {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            width: 32px;
+            height: 32px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #333;
+        }
+
+        .zoom-controls button:hover { background: #f0f0f0; }
+
+        .zoom-controls #zoomLevel {
+            font-size: 0.9rem;
+            font-weight: bold;
+            min-width: 48px;
+            text-align: center;
+        }
+
+        .zoom-controls #btnZoomFit {
+            width: auto;
+            padding: 0 12px;
+            font-size: 0.9rem;
+        }
+
+        /* ==========================================
+           紙面デザイン (A4横 / A5×2)
+           ========================================== */
+        .a4-sheet {
+            width: 297mm; height: 210mm; background-color: #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15); 
+            display: flex; flex-direction: row; position: relative;
+            overflow: hidden;
+        }
+        /* 中央線：A4の中心に固定（A5の幅変動に依存しない） */
+        .a4-sheet::after {
+            content: ""; position: absolute; top: 0; bottom: 0; left: 148.5mm;
+            border-left: 1px dashed #ccc; pointer-events: none; z-index: 5;
+        }
+
+        .a5-page {
+            flex: 0 0 148.5mm; width: 148.5mm; min-width: 148.5mm; max-width: 148.5mm;
+            height: 210mm; padding: 5mm;
+            font-family: var(--paper-font); color: #000; 
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        /* --- 左ページ：ヘッダー --- */
+        :root {
+            --halo-l: 0.220mm 0.000mm 0 #fff,0.203mm 0.084mm 0 #fff,0.156mm 0.156mm 0 #fff,0.084mm 0.203mm 0 #fff,0.000mm 0.220mm 0 #fff,-0.084mm 0.203mm 0 #fff,-0.156mm 0.156mm 0 #fff,-0.203mm 0.084mm 0 #fff,-0.220mm 0.000mm 0 #fff,-0.203mm -0.084mm 0 #fff,-0.156mm -0.156mm 0 #fff,-0.084mm -0.203mm 0 #fff,-0.000mm -0.220mm 0 #fff,0.084mm -0.203mm 0 #fff,0.156mm -0.156mm 0 #fff,0.203mm -0.084mm 0 #fff,0.450mm 0.000mm 0 #fff,0.416mm 0.172mm 0 #fff,0.318mm 0.318mm 0 #fff,0.172mm 0.416mm 0 #fff,0.000mm 0.450mm 0 #fff,-0.172mm 0.416mm 0 #fff,-0.318mm 0.318mm 0 #fff,-0.416mm 0.172mm 0 #fff,-0.450mm 0.000mm 0 #fff,-0.416mm -0.172mm 0 #fff,-0.318mm -0.318mm 0 #fff,-0.172mm -0.416mm 0 #fff,-0.000mm -0.450mm 0 #fff,0.172mm -0.416mm 0 #fff,0.318mm -0.318mm 0 #fff,0.416mm -0.172mm 0 #fff;
+            --halo-s: 0.160mm 0.000mm 0 #fff,0.148mm 0.061mm 0 #fff,0.113mm 0.113mm 0 #fff,0.061mm 0.148mm 0 #fff,0.000mm 0.160mm 0 #fff,-0.061mm 0.148mm 0 #fff,-0.113mm 0.113mm 0 #fff,-0.148mm 0.061mm 0 #fff,-0.160mm 0.000mm 0 #fff,-0.148mm -0.061mm 0 #fff,-0.113mm -0.113mm 0 #fff,-0.061mm -0.148mm 0 #fff,-0.000mm -0.160mm 0 #fff,0.061mm -0.148mm 0 #fff,0.113mm -0.113mm 0 #fff,0.148mm -0.061mm 0 #fff,0.320mm 0.000mm 0 #fff,0.296mm 0.122mm 0 #fff,0.226mm 0.226mm 0 #fff,0.122mm 0.296mm 0 #fff,0.000mm 0.320mm 0 #fff,-0.122mm 0.296mm 0 #fff,-0.226mm 0.226mm 0 #fff,-0.296mm 0.122mm 0 #fff,-0.320mm 0.000mm 0 #fff,-0.296mm -0.122mm 0 #fff,-0.226mm -0.226mm 0 #fff,-0.122mm -0.296mm 0 #fff,-0.000mm -0.320mm 0 #fff,0.122mm -0.296mm 0 #fff,0.226mm -0.226mm 0 #fff,0.296mm -0.122mm 0 #fff;
+        }
+        .header-area {
+            display: flex;
+            align-items: stretch;
+            gap: 2mm;
+            height: 17mm;
+            margin-bottom: 1mm;
+        }
+        /* タイトル帯：沙綾形の背景 + 白縁取り文字 */
+        .title-band {
+            flex: 1 1 0;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-evenly;
+            gap: 2mm;
+            padding: 0 2mm;
+            border: 0.3mm solid #000;
+            background-color: #fff;
+            background-image: url("data:image/png;base64,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");
+            background-size: 11.9mm 6.6mm;
+            background-position: center;
+        }
+        .ym-block {
+            font-weight: 700;
+            font-size: 13pt;
+            line-height: 1;   /* 2行の上端・下端をタイトル文字の上端・下端に合わせる（実測補正） */
+            position: relative;
+            top: 0.26mm;
+            white-space: nowrap;
+            text-shadow: var(--halo-s);
+        }
+        /* 和暦を西暦の幅に均等割り付け */
+        #era-display { display: flex; justify-content: space-between; }
+        .legend {
+            font-weight: 700;
+            font-size: 8.8pt;
+            line-height: 0.94;       /* 3行の上端・下端をタイトル文字に合わせる（実測補正） */
+            position: relative;
+            top: 0.27mm;
+            white-space: nowrap;
+            text-shadow: var(--halo-s);
+        }
+        .main-title {
+            font-size: var(--title-size);
+            font-weight: 700;
+            letter-spacing: 3px;
+            line-height: 1;
+            white-space: nowrap;
+            text-shadow: var(--halo-l);
+        }
+        .header-right {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            flex: 0 0 36mm;
+            width: 36mm;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+        #salon-sub { font-size: 9pt; }
+        #salon-name { font-size: 13pt; }
+        #salon-tel { font-size: 10pt; }
+
+        .editable {
+            display: block;
+            width: 100%;
+            text-align: center;
+            outline: none;
+            cursor: text;
+            border-bottom: 1px dotted #ccc;
+        }
+        .editable:focus {
+            background-color: #f0f8ff;
+            border-bottom: 1px solid var(--primary-color);
+        }
+
+        /* 店舗名：画像がある場合のみテキストを画像に差し替え */
+        #salon-img { display: none; width: 36mm; height: 11mm; object-fit: contain; }
+        .header-right.has-image #salon-sub,
+        .header-right.has-image #salon-name { display: none; }   /* 電話番号は画像時も残す */
+        .header-right.has-image #salon-img { display: block; }
+
+        /* --- 左ページ：テーブル --- */
+        .table-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 0;
+        }
+        .table-wrap { flex: 1 1 0; min-height: 0; }
+
+        .age-table { 
+            width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed;
+        }
+        .age-table td { 
+            border: 1px solid #000; text-align: center; vertical-align: middle; 
+            padding: 0.2mm 0;
+        }
+        .age-table th {
+            border: 1px solid #000; background: #ececec;
+            font-family: sans-serif; font-size: 7.5pt; font-weight: 700;
+            text-align: center; vertical-align: middle;
+            height: 5mm; padding: 0.3mm 0; white-space: nowrap;
+        }
+
+        .cell-inner {
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            height: 100%; width: 100%; line-height: 1.1;
+        }
+
+        .cell-era { font-size: 7pt; font-weight: 700; font-family: sans-serif; letter-spacing: 0; white-space: nowrap; }
+        .cell-year { font-size: 7pt; font-family: sans-serif; }
+        .cell-age { font-size: 10.5pt; font-weight: 700; margin: 0.3mm 0; }
+        .cell-zodiac { font-size: 9pt; letter-spacing: 1px; }
+
+        .table-note {
+            flex: 0 0 auto;
+            margin-top: 0.6mm;
+            font-family: sans-serif;
+            font-size: 7pt;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        /* --- 右ページ：歳時記（各セクションは横帯、中身は縦書き） --- */
+        .right-page {
+            --fs: 8.5pt;        /* 記述フォントサイズ */
+            --step: 4.5mm;      /* 行送り（列の間隔） */
+            --gap: 2.5mm;       /* タイトルと内容の間隔 */
+            --indent: 1em;      /* 字下げ（上端から） */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section {
+            display: flex;
+            flex-direction: row-reverse;   /* 右端起点：タイトルが右、内容が左へ */
+            justify-content: flex-start;
+            align-items: flex-start;
+            gap: var(--gap);               /* タイトルと内容の間 */
+            flex: 1 1 0;                   /* 4分割均等割 */
+            min-height: min-content;       /* 内容が収まる範囲でのみ均等割（内容より低くしない） */
+            padding: 1.5mm 0 1mm;
+        }
+
+        .section-title {
+            writing-mode: vertical-rl;
+            flex: 0 0 auto;
+            align-self: stretch;           /* 右の太線を要素エリアの高さいっぱいに伸ばす */
+            font-size: 11pt;
+            line-height: 1.5;
+            font-weight: 700;
+            letter-spacing: 2px;
+            border-right: 1px solid #000;
+            padding-right: 1.5mm;
+        }
+
+        .vertical-list {
+            flex: 1 1 0;
+            min-width: 0;
+            display: flex;
+            flex-direction: row-reverse;   /* 右から左へ並べる */
+            flex-wrap: wrap;               /* 溢れる場合のみ下段へ */
+            justify-content: flex-start;   /* 右寄せ */
+            align-items: flex-start;
+            align-content: flex-start;
+            row-gap: 1mm;
+            font-size: var(--fs);
+            font-weight: 700;
+            line-height: var(--step);
+        }
+        .vertical-list.one-row { flex-wrap: nowrap; }   /* 1段表示 */
+
+        .list-item {
+            writing-mode: vertical-rl;
+            display: flex;
+            flex-direction: row;           /* 縦書きなので上から下へ */
+            flex: 0 0 auto;
+            height: max-content;           /* 縦書き：高さ＝内容の長さ（折り返し・縮小禁止） */
+            padding-top: var(--indent);
+            white-space: nowrap;
+        }
+        .list-item > span { flex-shrink: 0; }
+
+        /* ==========================================
+           レスポンシブ対応 (スマホ)
+           ========================================== */
+        @media (max-width: 900px) and (min-height: 501px) {
+            /* 画面いっぱいに使う：上に設定欄（コンパクト）、残りをプレビュー */
+            body { flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+            .sidebar {
+                width: 100%; height: auto; flex: 0 0 auto; max-height: 46vh; max-height: 46dvh;
+                border-right: none; border-bottom: 1px solid var(--border-color);
+                padding: 10px 14px; gap: 8px 12px;
+                display: grid; grid-template-columns: 1fr auto; align-items: end;
+                padding-top: calc(10px + env(safe-area-inset-top));
+            }
+            .sidebar .header { grid-column: 1 / -1; }
+            .header h1 { font-size: 1.05rem; margin: 0; }
+            .header p { display: none; }
+            .sidebar .group-year { grid-column: 1; grid-row: 2; }
+            .sidebar .group-year select { padding: 10px; }
+            .sidebar .btn-print { grid-column: 2; grid-row: 2; width: auto; margin-top: 0; padding: 0 16px; height: 46px; white-space: nowrap; }
+            .sidebar .group-image { grid-column: 1 / -1; grid-row: 3; gap: 4px; }
+
+            .preview-area { flex: 1 1 0; min-height: 0; height: auto; }
+            .zoom-controls {
+                bottom: calc(10px + env(safe-area-inset-bottom));
+                right: 10px;
+                padding: 6px 8px;
+                gap: 6px;
+            }
+        }
+
+        /* 横向きスマホ（高さが小さい）：設定欄を左に細く・説明文は省略 */
+        @media (max-height: 500px) {
+            .sidebar { width: 240px; padding: 12px 14px; gap: 12px; }
+            .header h1 { font-size: 1.05rem; margin-bottom: 0; }
+            .header p { display: none; }
+            .btn-print { margin-top: 0; padding: 12px; }
+        }
+
+        /* タッチ端末（スマホ・タブレット）：ボタンを指で押せる大きさに */
+        @media (pointer: coarse) {
+            .zoom-controls button { width: 44px; height: 44px; font-size: 1.4rem; }
+            .zoom-controls #btnZoomFit { width: auto; min-width: 56px; padding: 0 12px; font-size: 1rem; }
+            .zoom-controls #zoomLevel { min-width: 52px; }
+        }
+
+        /* ==========================================
+           印刷用設定 (A4横向き強制)
+           ========================================== */
+        @media print {
+            @page {
+                size: A4 landscape;
+                margin: 0;
+            }
+
+            html, body {
+                width: 297mm; height: 210mm;
+                margin: 0; padding: 0; overflow: hidden;
+                background: #fff;
+            }
+
+            .sidebar, .zoom-controls { display: none !important; }
+
+            .preview-area {
+                display: block !important; width: 297mm !important; height: 210mm !important;
+                padding: 0 !important; margin: 0 !important; overflow: hidden !important; background: none !important;
+                position: static !important;
+            }
+
+            .preview-scroll {
+                display: block !important; position: static !important; overflow: visible !important;
+            }
+
+            .paper-stage {
+                width: 297mm !important; height: 210mm !important; margin: 0 !important; position: static !important;
+            }
+
+            .paper-wrapper {
+                display: block !important; width: 297mm !important; height: 210mm !important;
+                padding: 0 !important; margin: 0 !important; 
+                position: static !important;
+                transform: none !important;
+            }
+
+            .a4-sheet {
+                display: flex !important; flex-direction: row !important;
+                width: 297mm !important; height: 210mm !important;
+                margin: 0 !important; padding: 0 !important; box-shadow: none !important;
+            }
+
+            .a5-page {
+                flex: 0 0 148.5mm !important; width: 148.5mm !important; height: 210mm !important;
+                margin: 0 !important; padding: 5mm !important; 
+            }
+            
+            .editable { border-bottom: none !important; }
+            
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="header">
+            <h1>満年齢早見表作成機</h1>
+            <p>基準年を選択して、A4（横向き）に2枚並んだA5サイズの早見表を印刷・PDF保存できます。<br>右上の店舗情報は直接クリックして編集できます（自動保存されます）。</p>
+        </div>
+
+        <div class="control-group group-year">
+            <label for="baseYear">基準年（西暦）</label>
+            <select id="baseYear"></select>
+        </div>
+
+        <div class="control-group group-image">
+            <label for="salonImageInput">店舗名の画像（任意）</label>
+            <input type="file" id="salonImageInput" accept="image/*">
+            <div class="field-note">（最大アスペクト比 36:11 ≒ 3.3:1）</div>
+            <button type="button" id="btnSalonImageClear" class="btn-sub" hidden>テキスト表示に戻す</button>
+        </div>
+
+        <button class="btn-print" onclick="window.print()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            印刷 / PDF保存
+        </button>
+    </aside>
+
+    <main class="preview-area" id="previewArea">
+      <div class="preview-scroll" id="previewScroll">
+       <div class="paper-stage" id="paperStage">
+        <div class="paper-wrapper" id="paperWrapper">
+            <div class="a4-sheet" id="a4Sheet">
+                <!-- 左ページ：年齢早見表 -->
+                <div class="a5-page">
+                    <div class="header-area">
+                        <div class="title-band">
+                            <div class="ym-block">
+                                <div id="era-display">令和8年</div>
+                                <div id="west-display">西暦2026年</div>
+                            </div>
+                            <div class="legend">
+                                <div>九星</div>
+                                <div>生年</div>
+                                <div>干支</div>
+                            </div>
+                            <div class="main-title">満年齢早見表</div>
+                        </div>
+                        <div class="header-right" id="salonBlock">
+                            <img id="salon-img" alt="">
+                            <div contenteditable="true" class="editable" id="salon-sub">ビューティーサロン</div>
+                            <div contenteditable="true" class="editable" id="salon-name">emi</div>
+                            <div contenteditable="true" class="editable" id="salon-tel">03-1234-1234</div>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <div class="table-wrap">
+                            <table class="age-table" id="ageTable"></table>
+                        </div>
+                        <div class="table-note">※九星・干支は立春（2月3〜5日頃）から改まります。1月1日〜立春前日生まれは前年の欄をご覧ください。</div>
+                    </div>
+                </div>
+
+                <!-- 右ページ：歳時記（縦書き） -->
+                <div class="a5-page right-page" id="almanacPage">
+                    
+                    <div class="section">
+                        <div class="section-title">国民の祝日</div>
+                        <div class="vertical-list" id="holidays-list"></div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">長寿祝い</div>
+                        <div class="vertical-list one-row" id="longevity-list">
+                            <div class="list-item"><span class="date">還暦</span><span>満六十歳</span></div>
+                            <div class="list-item"><span class="date">古希</span><span>満七十歳</span></div>
+                            <div class="list-item"><span class="date">喜寿</span><span>満七十七歳</span></div>
+                            <div class="list-item"><span class="date">傘寿</span><span>満八十歳</span></div>
+                            <div class="list-item"><span class="date">米寿</span><span>満八十八歳</span></div>
+                            <div class="list-item"><span class="date">卒寿</span><span>満九十歳</span></div>
+                            <div class="list-item"><span class="date">白寿</span><span>満九十九歳</span></div>
+                            <div class="list-item"><span class="date">百寿</span><span>満百歳</span></div>
+                            <div class="list-item"><span class="date">茶寿</span><span>満百八歳</span></div>
+                            <div class="list-item"><span class="date">皇寿</span><span>満百十一歳</span></div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">二十四節気</div>
+                        <div class="vertical-list one-row" id="solar-terms-list"></div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-title">行事と雑節</div>
+                        <div class="vertical-list one-row" id="events-list"></div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+       </div>
+      </div>
+
+        <!-- ズームコントロール -->
+        <div class="zoom-controls">
+            <button id="btnZoomOut" title="縮小">−</button>
+            <span id="zoomLevel">100%</span>
+            <button id="btnZoomIn" title="拡大">＋</button>
+            <button id="btnZoomFit" title="ウィンドウに合わせる">Fit</button>
+        </div>
+    </main>
+
+    <script>
+        // --- 漢数字変換 ---
+        function toKanji(num) {
+            const kanji = ["〇", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
+            if (num < 10) return kanji[num];
+            if (num === 10) return "十";
+            if (num < 20) return "十" + kanji[num % 10];
+            const tens = Math.floor(num / 10);
+            const ones = num % 10;
+            return kanji[tens] + "十" + (ones === 0 ? "" : kanji[ones]);
+        }
+
+        // --- 祝日データ取得 ---
+        const HOLIDAY_API_URL = 'https://holidays-jp.github.io/api/v1/date.json';
+        let holidaysData = {};
+
+        async function loadHolidays() {
+            try {
+                const res = await fetch(HOLIDAY_API_URL);
+                if (!res.ok) throw new Error('API fetch failed');
+                holidaysData = await res.json();
+            } catch (e) {
+                console.error('祝日データ取得失敗:', e);
+                holidaysData = {};
+            } finally {
+                buildAlmanac();
+            }
+        }
+
+        // --- 日付・干支ロジック ---
+        const eras = [
+            { name: "令和", start: 2019 }, { name: "平成", start: 1989 },
+            { name: "昭和", start: 1926 }, { name: "大正", start: 1912 }, { name: "明治", start: 1868 }
+        ];
+        const jikkan = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"];
+        const junishi = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"];
+
+        function eraOf(year) {
+            for (let i = 0; i < eras.length; i++) if (year >= eras[i].start) return i;
+            return -1;
+        }
+
+        // ヘッダー・選択肢用（元年表記）
+        function getEra(year) {
+            const i = eraOf(year);
+            if (i < 0) return "";
+            const n = year - eras[i].start + 1;
+            return `${eras[i].name}${n === 1 ? '元' : n}年`;
+        }
+
+        // セル用：改元年は「令和元(平成31)年」のように前元号を併記
+        function getEraLabel(year) {
+            const i = eraOf(year);
+            if (i < 0) return "";
+            const n = year - eras[i].start + 1;
+            if (n === 1 && i + 1 < eras.length) {
+                const p = eras[i + 1];
+                return `${eras[i].name}元(${p.name}${year - p.start + 1})年`;
+            }
+            return `${eras[i].name}${n}年`;
+        }
+
+        function getEto(year) {
+            const k = ((year - 4) % 10 + 10) % 10;
+            const s = ((year - 4) % 12 + 12) % 12;
+            return jikkan[k] + junishi[s];
+        }
+
+        // 九星（西暦年ベース。一白水星=1900年。年は立春で改まる点は表の注記で明示）
+        const KYUSEI = ["一白水星", "二黒土星", "三碧木星", "四緑木星", "五黄土星", "六白金星", "七赤金星", "八白土星", "九紫火星"];
+        function getKyusei(year) {
+            let n = 11 - (year % 9);
+            if (n > 9) n -= 9;
+            if (n < 1) n += 9;
+            return KYUSEI[n - 1];
+        }
+
+        function populateYearSelect() {
+            const select = document.getElementById('baseYear');
+            const currentYear = new Date().getFullYear();
+            const startYear = currentYear - 10;
+            const endYear = currentYear + 10;
+            select.innerHTML = '';
+            for (let y = startYear; y <= endYear; y++) {
+                const option = document.createElement('option');
+                option.value = y;
+                option.textContent = `${y}年 (${getEra(y)})`;
+                if (y === currentYear) option.selected = true;
+                select.appendChild(option);
+            }
+        }
+
+        // 和暦を1文字ずつ（数字は1まとまり）に分け、西暦行の幅へ均等割り付け
+        function setEraJustified(text) {
+            const el = document.getElementById('era-display');
+            el.innerHTML = (text.match(/\d+|./gu) || []).map(t => `<span>${t}</span>`).join('');
+        }
+
+        function buildAgeTable(baseYear) {
+            setEraJustified(getEra(baseYear));
+            document.getElementById('west-display').innerText = `西暦${baseYear}年`;
+            
+            const table = document.getElementById('ageTable');
+            table.innerHTML = '';
+            
+            const maxAge = 107;
+            const cols = 9;
+            const rows = Math.ceil((maxAge + 1) / cols);
+            
+            // 列見出し：9列は生年が9年ずつ離れるため、列ごとに九星が一定
+            let html = '<thead><tr>';
+            for (let c = 0; c < cols; c++) {
+                html += `<th>${getKyusei(baseYear - maxAge + c)}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+            for (let r = 0; r < rows; r++) {
+                html += '<tr>';
+                for (let c = 0; c < cols; c++) {
+                    const age = maxAge - (r * cols + c);
+                    if (age < 0) {
+                        html += '<td style="background:#f9f9f9; border:none;"></td>';
+                        continue;
+                    }
+                    const birthYear = baseYear - age;
+                    html += `
+                        <td>
+                            <div class="cell-inner">
+                                <div class="cell-era">${getEraLabel(birthYear)}生</div>
+                                <div class="cell-year">(${birthYear})</div>
+                                <div class="cell-age">${age}歳</div>
+                                <div class="cell-zodiac">${getEto(birthYear)}</div>
+                            </div>
+                        </td>
+                    `;
+                }
+                html += '</tr>';
+            }
+            html += '</tbody>';
+            table.innerHTML = html;
+            fitEraCells();
+        }
+
+        // 長い和暦表記（例：昭和元(大正15)年生）がセルに収まるよう縮小
+        function fitEraCells() {
+            document.querySelectorAll('.cell-era').forEach(el => {
+                el.style.fontSize = '';
+                const box = el.parentElement;
+                let size = 7;
+                while (el.offsetWidth > box.clientWidth - 1 && size > 4.4) {
+                    size = Math.round((size - 0.1) * 10) / 10;
+                    el.style.fontSize = size + 'pt';
+                }
+            });
+        }
+
+        /* ==========================================================
+           暦データ（二十四節気・雑節・旧暦行事）
+           出典・方法：
+             太陽視黄経＝VSOP2000系の地球位置＋章動・光行差、ΔT補正、中央標準時(JST)の日付で算出。
+             朔＝月の位置の高精度計算(JST日付)。旧暦月は中気規則（雨水=1月 … 小雪=10月）で決定。
+             国立天文台「暦要項」の公式値（令和7〜9年(2025〜2027)の二十四節気72件・雑節21件）と全件一致を確認済み。
+             初午＝2月最初の午の日。旧暦行事は、日付境界の±5分以内や旧暦の月番号が確定しない年(2033年の亥の子等)は null として非表示。
+             ※2030年の雨水は2月18日23:59:48（日付境界の12秒前）。令和12年暦要項（2029年2月公表）で要確認。
+           KOYOMI[年] = [二十四節気24個(小寒〜冬至), 入梅, 半夏生, 旧元日, 十五夜, 十三夜, 亥の子, 初午]  値は 月*100+日
+           ========================================================== */
+        const SEKKI_NAMES = ["小寒", "大寒", "立春", "雨水", "啓蟄", "春分", "清明", "穀雨", "立夏", "小満", "芒種", "夏至",
+                             "小暑", "大暑", "立秋", "処暑", "白露", "秋分", "寒露", "霜降", "立冬", "小雪", "大雪", "冬至"];
+        const KOYOMI = {
+            2016:[106,121,204,219,305,320,404,420,505,520,605,621,707,722,807,823,907,922,1008,1023,1107,1122,1207,1221,610,701,208,915,1013,1101,206],
+            2017:[105,120,204,218,305,320,404,420,505,521,605,621,707,723,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,128,1004,1101,1120,212],
+            2018:[105,120,204,219,306,321,405,420,505,521,606,621,707,723,807,823,908,923,1008,1023,1107,1122,1207,1222,611,702,216,924,1021,1115,207],
+            2019:[106,120,204,219,306,321,405,420,506,521,606,622,707,723,808,823,908,923,1008,1024,1108,1122,1207,1222,611,702,205,913,1011,null,202],
+            2020:[106,120,204,219,305,320,404,419,505,520,605,621,707,722,807,823,907,922,1008,1023,1107,1122,1207,1221,610,701,125,1001,1029,1116,209],
+            2021:[105,120,203,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,212,921,1018,1111,203],
+            2022:[105,120,204,219,305,321,405,420,505,521,606,621,707,723,807,823,908,923,1008,1023,1107,1122,1207,1222,611,702,201,910,1008,1025,210],
+            2023:[106,120,204,219,306,321,405,420,506,521,606,621,707,723,808,823,908,923,1008,1024,1108,1122,1207,1222,611,702,122,929,1027,1113,205],
+            2024:[106,120,204,219,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1008,1023,1107,1122,1207,1221,610,701,210,917,1015,1107,212],
+            2025:[105,120,203,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1222,611,701,129,1006,1102,1126,206],
+            2026:[105,120,204,219,305,320,405,420,505,521,606,621,707,723,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,217,925,1023,1109,201],
+            2027:[105,120,204,219,306,321,405,420,506,521,606,621,707,723,808,823,908,923,1008,1024,1108,1122,1207,1222,611,702,207,915,1012,1104,208],
+            2028:[106,120,204,219,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1008,1023,1107,1122,1206,1221,610,701,127,1003,1030,1122,203],
+            2029:[105,120,203,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1221,610,701,213,922,1020,1117,209],
+            2030:[105,120,204,218,305,320,405,420,505,521,605,621,707,723,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,null,912,1009,1031,204],
+            2031:[105,120,204,219,306,321,405,420,506,521,606,621,707,723,808,823,908,923,1008,1023,1108,1122,1207,1222,611,702,123,1001,1028,1119,211],
+            2032:[106,120,204,219,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1008,1023,1107,1122,1206,1221,610,701,211,919,1016,1113,206],
+            2033:[105,120,203,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1221,610,701,131,1007,1104,null,212],
+            2034:[105,120,204,218,305,320,405,420,505,521,605,621,707,723,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,120,927,1024,1115,207],
+            2035:[105,120,204,219,306,321,405,420,506,521,606,621,707,723,808,823,908,923,1008,1023,1107,1122,1207,1222,611,702,208,916,1013,1110,202],
+            2036:[106,120,204,219,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1008,1023,1107,1122,1206,1221,610,701,128,1004,1031,1128,209],
+            2037:[105,120,203,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1221,610,701,215,924,1021,1111,203],
+            2038:[105,120,204,218,305,320,405,420,505,521,605,621,707,723,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,204,913,1011,1106,210],
+            2039:[105,120,204,219,306,321,405,420,506,521,606,621,707,723,808,823,908,923,1008,1023,1107,1122,1207,1222,611,702,124,1002,1030,1125,205],
+            2040:[106,120,204,219,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1008,1023,1107,1122,1206,1221,610,701,212,921,1018,1107,212],
+            2041:[105,120,203,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1221,610,701,201,910,1007,1102,206],
+            2042:[105,120,204,218,305,320,405,420,505,521,605,621,707,723,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,122,928,1026,1121,201],
+            2043:[105,120,204,219,306,321,405,420,505,521,606,621,707,723,807,823,908,923,1008,1023,1107,1122,1207,1222,611,702,210,917,1015,1104,208],
+            2044:[106,120,204,219,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1008,1023,1107,1122,1206,1221,610,701,130,1005,1102,null,203],
+            2045:[105,120,203,218,305,320,404,420,505,520,605,621,707,722,807,823,907,922,1008,1023,1107,1122,1207,1221,610,701,217,925,1022,1117,209],
+            2046:[105,120,204,218,305,320,404,420,505,521,605,621,707,723,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,206,915,1012,1031,204],
+            2047:[105,120,204,219,306,321,405,420,505,521,606,621,707,723,807,823,908,923,1008,1023,1107,1122,1207,1222,611,702,126,1004,1031,1119,211],
+            2048:[106,120,204,219,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1007,1023,1107,1122,1206,1221,610,701,214,922,1020,1113,206],
+            2049:[105,120,203,218,305,320,404,420,505,520,605,621,707,722,807,823,907,922,1008,1023,1107,1122,1207,1221,610,701,202,911,1009,1027,212],
+            2050:[105,120,204,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,123,930,1028,1115,207],
+            2051:[105,120,204,219,306,321,405,420,505,521,606,621,707,723,807,823,908,923,1008,1023,1107,1122,1207,1222,611,702,211,919,1017,null,202],
+            2052:[106,120,204,219,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1007,1023,1107,1121,1206,1221,610,701,201,907,null,1128,209],
+            2053:[105,119,203,218,305,320,404,419,505,520,605,621,706,722,807,823,907,922,1008,1023,1107,1122,1207,1221,610,701,120,926,1024,1111,203],
+            2054:[105,120,204,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1222,611,701,208,916,1013,1106,210],
+            2055:[105,120,204,219,305,321,405,420,505,521,606,621,707,723,807,823,908,923,1008,1023,1107,1122,1207,1222,611,702,128,1005,1101,1125,205],
+            2056:[106,120,204,219,305,320,404,419,505,520,605,620,706,722,807,822,907,922,1007,1023,1107,1121,1206,1221,610,701,215,924,1021,1107,212],
+            2057:[105,119,203,218,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1008,1023,1107,1122,1207,1221,610,701,204,913,1011,1102,206],
+            2058:[105,120,203,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1222,610,701,124,1002,1029,1121,201],
+            2059:[105,120,204,219,305,320,405,420,505,521,606,621,707,723,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,212,921,1019,1116,208],
+            2060:[105,120,204,219,305,320,404,419,505,520,605,620,706,722,807,822,907,922,1007,1023,1107,1121,1206,1221,610,701,202,909,1007,1029,203],
+            2061:[105,119,203,218,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1008,1023,1107,1122,1206,1221,610,701,122,928,1025,1117,209],
+            2062:[105,120,203,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1221,610,701,209,917,1015,1112,204],
+            2063:[105,120,204,219,305,320,405,420,505,521,605,621,707,723,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,129,1006,1103,1201,211],
+            2064:[105,120,204,219,305,320,404,419,505,520,605,620,706,722,807,822,907,922,1007,1022,1107,1121,1206,1221,610,701,217,925,1022,1113,206],
+            2065:[105,119,203,218,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1008,1023,1107,1122,1206,1221,610,701,205,915,1012,1108,212],
+            2066:[105,120,203,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1221,610,701,126,1003,1031,1127,207],
+            2067:[105,120,204,218,305,320,405,420,505,521,605,621,707,723,807,823,907,923,1008,1023,1107,1122,1207,1222,611,702,214,923,1020,1110,202],
+            2068:[105,120,204,219,305,320,404,419,505,520,605,620,706,722,807,822,907,922,1007,1022,1106,1121,1206,1221,610,701,203,911,1008,1104,209],
+            2069:[105,119,203,218,305,320,404,419,505,520,605,621,706,722,807,822,907,922,1008,1023,1107,1122,1206,1221,610,701,123,929,1027,1123,203],
+            2070:[105,120,203,218,305,320,404,420,505,521,605,621,707,722,807,823,907,923,1008,1023,1107,1122,1207,1221,610,701,211,919,1016,1106,210]
+        };
+
+        function addDaysMD(year, md, n) {
+            const d = new Date(Date.UTC(year, Math.floor(md / 100) - 1, (md % 100) + n));
+            return (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+        }
+        // month月の第n weekday曜日（0=日）
+        function nthWeekdayMD(year, month, weekday, n) {
+            const first = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+            return month * 100 + 1 + ((weekday - first + 7) % 7) + (n - 1) * 7;
+        }
+        function mdKanji(md) {
+            return `${toKanji(Math.floor(md / 100))}月${toKanji(md % 100)}日`;
+        }
+
+        function getSolarTerms(year) {
+            const K = KOYOMI[year];
+            if (!K) return [];
+            return SEKKI_NAMES.map((name, i) => ({ md: K[i], name }));
+        }
+
+        // 行事と雑節：年ごとに日付が変わるものは暦データ／曜日から算出
+        function getEvents(year) {
+            const K = KOYOMI[year];
+            const list = [];
+            const add = (md, name) => { if (md != null) list.push({ md, name }); };
+            add(101, '初詣');
+            if (K) {
+                const risshun = K[2], shunbun = K[5], shubun = K[17];
+                add(K[26], '旧元日');
+                add(K[30], '初午');
+                add(addDaysMD(year, risshun, -1), '節分');
+                add(addDaysMD(year, shunbun, -3), '春彼岸入り');
+                add(addDaysMD(year, shunbun, 3), '春彼岸明け');
+                add(addDaysMD(year, risshun, 87), '八十八夜');
+                add(K[24], '入梅');
+                add(K[25], '半夏生');
+                add(addDaysMD(year, risshun, 209), '二百十日');
+                add(addDaysMD(year, shubun, -3), '秋彼岸入り');
+                add(addDaysMD(year, shubun, 3), '秋彼岸明け');
+                add(K[27], '十五夜');
+                add(K[28], '十三夜');
+                add(K[29], '亥の子');
+            }
+            add(303, 'ひなまつり');
+            add(408, '花まつり');
+            add(413, '十三詣り');
+            add(501, 'メーデー');
+            add(505, '端午の節句');
+            add(nthWeekdayMD(year, 5, 0, 2), '母の日');
+            add(nthWeekdayMD(year, 6, 0, 3), '父の日');
+            add(707, '七夕');
+            add(713, 'お盆迎え火');
+            add(716, 'お盆送り火');
+            add(813, '月遅れ盆迎え火');
+            add(816, '月遅れ盆送り火');
+            add(909, '重陽の節句');
+            add(1115, '七五三');
+            add(1231, '大晦日');
+            list.sort((a, b) => a.md - b.md);
+            return list;
+        }
+
+        // 日付の頭を揃えるための計算関数
+        function alignListItems(listId) {
+            const list = document.getElementById(listId);
+            if (!list) return;
+            const dates = list.querySelectorAll('.date');
+            if (dates.length === 0) return;
+            
+            let maxChars = 0;
+            dates.forEach(date => {
+                // 文字幅を全角1、半角0.5として計算
+                const text = date.textContent;
+                let count = 0;
+                for (let i = 0; i < text.length; i++) {
+                    const charCode = text.charCodeAt(i);
+                    if (charCode >= 0x0000 && charCode <= 0x00ff) {
+                        count += 0.5;
+                    } else {
+                        count += 1;
+                    }
+                }
+                if (count > maxChars) maxChars = count;
+            });
+            
+            // 幅を固定 (1文字 ≒ 1em) + 半角スペース1文字分(0.5em)の余白を足す
+            const width = `${maxChars + 0.5}em`;
+            dates.forEach(date => {
+                date.style.flex = `0 0 ${width}`;
+            });
+        }
+
+        function buildAlmanac() {
+            const currentYear = parseInt(document.getElementById('baseYear').value) || new Date().getFullYear();
+
+            // 祝日
+            const hList = document.getElementById('holidays-list');
+            hList.innerHTML = '';
+            const yearHolidays = Object.keys(holidaysData)
+                .filter(dateStr => dateStr.startsWith(currentYear.toString()))
+                .sort();
+
+            if (yearHolidays.length === 0) {
+                hList.innerHTML = '<div class="list-item"><span class="date">データ</span><span>なし</span></div>';
+            } else {
+                yearHolidays.forEach(dateStr => {
+                    const [, m, d] = dateStr.split('-');
+                    // 「憲法記念日 振替休日」等は「振替休日」に整形（縦幅の超過防止）
+                    const name = String(holidaysData[dateStr]).replace(/^.+\s+振替休日$/, '振替休日');
+                    const dateKanji = `${toKanji(parseInt(m))}月${toKanji(parseInt(d))}日`;
+                    hList.innerHTML += `<div class="list-item"><span class="date">${dateKanji}</span><span>${name}</span></div>`;
+                });
+            }
+
+            const fill = (id, items) => {
+                const el = document.getElementById(id);
+                el.innerHTML = items.length
+                    ? items.map(it => `<div class="list-item"><span class="date">${mdKanji(it.md)}</span><span>${it.name}</span></div>`).join('')
+                    : '<div class="list-item"><span class="date">データ</span><span>なし</span></div>';
+            };
+            fill('solar-terms-list', getSolarTerms(currentYear));   // 二十四節気
+            fill('events-list', getEvents(currentYear));            // 行事と雑節
+
+            // 各リストの日付幅を揃える
+            alignListItems('holidays-list');
+            alignListItems('solar-terms-list');
+            alignListItems('events-list');
+            alignListItems('longevity-list');
+
+            fitAlmanac();
+        }
+
+        // 左端（A5内余白）を超える場合のみ行送りを詰める
+        function fitAlmanac() {
+            const page = document.getElementById('almanacPage');
+            if (!page || !page.offsetWidth) return;
+            const items = () => page.querySelectorAll('.list-item');
+            let step = 4.5;
+            page.style.setProperty('--step', step + 'mm');
+            const overflow = () => {
+                const pr = page.getBoundingClientRect();
+                const k = pr.width / page.offsetWidth;
+                const limit = pr.left + 5 * (96 / 25.4) * k - 0.5;
+                for (const el of items()) if (el.getBoundingClientRect().left < limit) return true;
+                return false;
+            };
+            while (overflow() && step > 3.6) {
+                step = Math.round((step - 0.1) * 10) / 10;
+                page.style.setProperty('--step', step + 'mm');
+            }
+        }
+
+        // --- サロン情報のキャッシュ（localStorage） ---
+        function initSalonInfo() {
+            const fields = ['salon-sub', 'salon-name', 'salon-tel'];
+            fields.forEach(id => {
+                const el = document.getElementById(id);
+                const saved = localStorage.getItem(id);
+                if (saved) {
+                    el.innerText = saved;
+                }
+                el.addEventListener('input', () => {
+                    localStorage.setItem(id, el.innerText);
+                });
+                el.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') e.preventDefault();
+                });
+            });
+        }
+
+        // --- 店舗名の画像差し替え（localStorage保存・縮小して保持） ---
+        function initSalonImage() {
+            const block = document.getElementById('salonBlock');
+            const img = document.getElementById('salon-img');
+            const input = document.getElementById('salonImageInput');
+            const btnClear = document.getElementById('btnSalonImageClear');
+            const KEY = 'salon-image';
+
+            function show(dataUrl) {
+                if (dataUrl) {
+                    img.src = dataUrl;
+                    block.classList.add('has-image');
+                    btnClear.hidden = false;
+                } else {
+                    img.removeAttribute('src');
+                    block.classList.remove('has-image');
+                    btnClear.hidden = true;
+                }
+            }
+
+            try { show(localStorage.getItem(KEY)); } catch (e) { show(null); }
+
+            input.addEventListener('change', () => {
+                const file = input.files && input.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const src = new Image();
+                    src.onload = () => {
+                        // 枠 36mm×11mm の印刷品質（約600dpi）相当まで縮小
+                        const maxW = 756, maxH = 425;
+                        const w0 = src.naturalWidth || src.width, h0 = src.naturalHeight || src.height;
+                        const k = Math.min(1, maxW / w0, maxH / h0);
+                        const c = document.createElement('canvas');
+                        c.width = Math.max(1, Math.round(w0 * k));
+                        c.height = Math.max(1, Math.round(h0 * k));
+                        const ctx = c.getContext('2d');
+                        const keepAlpha = /png|webp|svg|gif/.test(file.type);
+                        if (!keepAlpha) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); }
+                        ctx.drawImage(src, 0, 0, c.width, c.height);
+                        const dataUrl = keepAlpha ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.92);
+                        show(dataUrl);
+                        try { localStorage.setItem(KEY, dataUrl); } catch (e) { console.warn('画像の保存に失敗（表示のみ有効）', e); }
+                    };
+                    src.src = reader.result;
+                };
+                reader.readAsDataURL(file);
+                input.value = '';
+            });
+
+            btnClear.addEventListener('click', () => {
+                show(null);
+                try { localStorage.removeItem(KEY); } catch (e) {}
+            });
+        }
+
+        // --- ズーム機能の初期化（PC：ボタン／スマホ：ボタン＋ピンチ） ---
+        function initZoom() {
+            const previewArea = document.getElementById('previewArea');
+            const scroller = document.getElementById('previewScroll');
+            const stage = document.getElementById('paperStage');
+            const paperWrapper = document.getElementById('paperWrapper');
+            const zoomLevelText = document.getElementById('zoomLevel');
+            const btnZoomIn = document.getElementById('btnZoomIn');
+            const btnZoomOut = document.getElementById('btnZoomOut');
+            const btnZoomFit = document.getElementById('btnZoomFit');
+            const mobileMQ = window.matchMedia('(max-width: 900px)');
+
+            const PAD = 20;                       // 紙の周囲の余白(px)
+            const MM = 96 / 25.4;
+            const A4W = 297 * MM;
+            const A4H = 210 * MM;
+            const A5W = 148.5 * MM;
+            const ZMIN = 0.2, ZMAX = 3;
+            let currentZoom = 1;
+            let isFitMode = true;                 // 「Fit」状態（画面に全体を収める）
+            let userZoomed = false;               // 利用者が倍率を操作したか
+            let lastWidth = previewArea.clientWidth;
+
+            const clamp = z => Math.max(ZMIN, Math.min(ZMAX, z));
+
+            // ウィンドウに収まる最大倍率（1倍で頭打ちにしない）
+            function calculateFitZoom() {
+                const scaleX = (previewArea.clientWidth - PAD * 2) / A4W;
+                const scaleY = (previewArea.clientHeight - PAD * 2) / A4H;
+                return clamp(Math.min(scaleX, scaleY, ZMAX));
+            }
+
+            // anchor: 未指定=中央に配置 / true=画面中央を維持 / {x,y}=その画面座標の紙面位置を維持
+            function setZoom(z, anchor) {
+                const r = scroller.getBoundingClientRect();
+                let fx = scroller.clientWidth / 2, fy = scroller.clientHeight / 2;
+                let rx = 0.5, ry = 0.5;
+                if (anchor && anchor !== true) { fx = anchor.x - r.left; fy = anchor.y - r.top; }
+                if (anchor && stage.offsetWidth > 0 && stage.offsetHeight > 0) {
+                    rx = (scroller.scrollLeft + fx) / stage.offsetWidth;
+                    ry = (scroller.scrollTop + fy) / stage.offsetHeight;
+                }
+                currentZoom = z;
+                zoomLevelText.textContent = Math.round(z * 100) + '%';
+                paperWrapper.style.setProperty('--zoom', z);
+                stage.style.width = (A4W * z + PAD * 2) + 'px';
+                stage.style.height = (A4H * z + PAD * 2) + 'px';
+                // Fit以下ではスクロールバーなし。Fitを超えるとはみ出した方向にバーが出る
+                scroller.scrollLeft = Math.max(0, rx * stage.offsetWidth - fx);
+                scroller.scrollTop = Math.max(0, ry * stage.offsetHeight - fy);
+            }
+
+            function applyFitZoom() {
+                isFitMode = true;
+                userZoomed = false;
+                setZoom(calculateFitZoom());
+                scroller.scrollLeft = 0;
+                scroller.scrollTop = 0;
+            }
+
+            // 初期表示：PC・タブレットは全体表示(Fit)、スマホは左ページ（A5）が画面幅に収まる倍率
+            function applyInitialZoom() {
+                if (mobileMQ.matches && calculateFitZoom() < 0.6) {
+                    // 全体表示だと小さすぎる画面（スマホ）：左ページ（A5）が画面幅に収まる倍率
+                    isFitMode = false;
+                    setZoom(clamp((previewArea.clientWidth - PAD * 2) / A5W));
+                    scroller.scrollLeft = 0;
+                    scroller.scrollTop = 0;
+                } else {
+                    applyFitZoom();   // PC・タブレット：全体表示(Fit)
+                }
+            }
+
+            applyInitialZoom();
+            requestAnimationFrame(applyInitialZoom);
+
+            window.addEventListener('resize', () => {
+                const w = previewArea.clientWidth;
+                if (isFitMode) { applyFitZoom(); }
+                else if (!userZoomed && w !== lastWidth) { applyInitialZoom(); }   // 画面回転など（キーボード表示では動かさない）
+                lastWidth = w;
+            });
+
+            btnZoomIn.addEventListener('click', () => {
+                isFitMode = false; userZoomed = true;
+                setZoom(clamp(currentZoom + 0.1), true);
+            });
+
+            btnZoomOut.addEventListener('click', () => {
+                isFitMode = false; userZoomed = true;
+                setZoom(clamp(currentZoom - 0.1), true);
+            });
+
+            btnZoomFit.addEventListener('click', applyFitZoom);
+
+            // --- ピンチ操作（2本指）：指の中点を基準に拡大縮小 ---
+            let pinch = null;
+            const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+            scroller.addEventListener('touchstart', e => {
+                if (e.touches.length === 2) pinch = { d: dist(e.touches), z: currentZoom };
+            }, { passive: true });
+            scroller.addEventListener('touchmove', e => {
+                if (!pinch || e.touches.length !== 2) return;
+                e.preventDefault();
+                isFitMode = false; userZoomed = true;
+                const t = e.touches;
+                setZoom(clamp(pinch.z * dist(t) / pinch.d),
+                        { x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+            }, { passive: false });
+            const endPinch = e => { if (e.touches.length < 2) pinch = null; };
+            scroller.addEventListener('touchend', endPinch, { passive: true });
+            scroller.addEventListener('touchcancel', endPinch, { passive: true });
+        }
+
+        // --- 初期化 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            populateYearSelect();
+            const baseYearSelect = document.getElementById('baseYear');
+            
+            function render() {
+                const baseYear = parseInt(baseYearSelect.value);
+                buildAgeTable(baseYear);
+                buildAlmanac();
+            }
+
+            baseYearSelect.addEventListener('change', render);
+            
+            initSalonInfo();
+            initSalonImage();
+            loadHolidays();
+            render();
+            initZoom();
+            if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fitAlmanac(); fitEraCells(); });
+        });
+    </script>
+</body>
+</html>
