@@ -21,8 +21,11 @@
             --primary-hover: #1d4ed8;
             --border-color: #e5e7eb;
             
-            --paper-font: "Noto Serif JP", "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Hiragino Mincho Pro", "MS PMincho", "MS Mincho", serif;
-            --gothic-font: "Noto Sans JP", "Yu Gothic", "YuGothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+            /* 紙面は端末内のフォントを最優先にする。Webフォント（Noto Serif JP）を
+               先頭に置くと、読み込み完了時に表示が切り替わってゴシック化する環境が
+               あるため、後方に回す（端末に明朝が無い環境向けの予備として残す）。 */
+            --paper-font: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Hiragino Mincho Pro", "MS PMincho", "MS Mincho", "Noto Serif JP", serif;
+            --gothic-font: "Yu Gothic", "YuGothic", "Hiragino Kaku Gothic ProN", "Meiryo", "Noto Sans JP", sans-serif;
             --title-size: 26pt;
         }
 
