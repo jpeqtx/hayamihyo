@@ -14,11 +14,21 @@
         .row { border-top: 1px solid #ccc; padding: 14px 0; }
         .label { font-size: 13px; color: #555; margin-bottom: 6px; }
         .sample { font-size: 30px; font-weight: 700; }
+        @font-face {
+            font-family: "Paper Yu Mincho";
+            src: local("Yu Mincho"), local("YuMincho"), local("游明朝");
+            font-weight: 400; font-style: normal;
+        }
+        @font-face {
+            font-family: "Paper Yu Mincho";
+            src: local("Yu Mincho Demibold"), local("Yu Mincho Bold"), local("YuMincho Demibold"), local("YuMincho Bold");
+            font-weight: 700; font-style: normal;
+        }
         .a { font-family: "Yu Mincho", "YuMincho", serif; }
         .b { font-family: "Noto Serif JP", serif; }
         .c { font-family: "Yu Gothic", "YuGothic", sans-serif; }
         .d { font-family: serif; }
-        .e { font-family: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Hiragino Mincho Pro", "MS PMincho", "MS Mincho", "Noto Serif JP", serif; }
+        .e { font-family: "Paper Yu Mincho", "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Hiragino Mincho Pro", "MS PMincho", "MS Mincho", "Noto Serif JP", serif; }
         .f { font-family: sans-serif; }
     </style>
 </head>
@@ -30,7 +40,7 @@
     <div class="row"><div class="label">B：Webフォント Noto Serif JP だけを指定</div><div class="sample b">満年齢早見表 永 令和八年</div></div>
     <div class="row"><div class="label">C：游ゴシックだけを指定</div><div class="sample c">満年齢早見表 永 令和八年</div></div>
     <div class="row"><div class="label">D：serif（一般名）だけを指定</div><div class="sample d">満年齢早見表 永 令和八年</div></div>
-    <div class="row"><div class="label">E：現在の早見表ページの明朝指定そのもの</div><div class="sample e">満年齢早見表 永 令和八年</div></div>
+    <div class="row"><div class="label">E：現在の早見表ページの明朝指定そのもの（游明朝＋太字割当）</div><div class="sample e">満年齢早見表 永 令和八年</div></div>
     <div class="row"><div class="label">F：sans-serif（一般名）だけを指定</div><div class="sample f">満年齢早見表 永 令和八年</div></div>
 </body>
 </html>

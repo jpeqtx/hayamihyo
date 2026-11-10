@@ -12,6 +12,23 @@
         /* ==========================================
            UI / UX デザイン
            ========================================== */
+
+        /* 游明朝の太字割当：Chrome では "Yu Mincho" の太字が同じ書体名で
+           拾われないため、太字側の実体（Demibold / Bold）を @font-face で
+           明示的に割り当てた専用ファミリー "Paper Yu Mincho" を作る。 */
+        @font-face {
+            font-family: "Paper Yu Mincho";
+            src: local("Yu Mincho"), local("YuMincho"), local("游明朝");
+            font-weight: 400;
+            font-style: normal;
+        }
+        @font-face {
+            font-family: "Paper Yu Mincho";
+            src: local("Yu Mincho Demibold"), local("Yu Mincho Bold"), local("YuMincho Demibold"), local("YuMincho Bold");
+            font-weight: 700;
+            font-style: normal;
+        }
+
         :root {
             --bg-color: #f4f6f8;
             --panel-bg: #ffffff;
@@ -21,11 +38,10 @@
             --primary-hover: #1d4ed8;
             --border-color: #e5e7eb;
             
-            /* 紙面の明朝は Webフォント（Noto Serif JP）を先頭にする。
-               端末の游明朝は Chrome で太字（700）が別書体扱いになり太字が
-               効かないため、本物の 400/700 を持つ Noto Serif JP を優先し、
-               游明朝などは読み込めない環境向けの予備として後ろに置く。 */
-            --paper-font: "Noto Serif JP", "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Hiragino Mincho Pro", "MS PMincho", "MS Mincho", serif;
+            /* 紙面の明朝は游明朝に統一する（ローカル印刷の書体に合わせる）。
+               先頭は太字割当済みの "Paper Yu Mincho"。
+               游明朝の無い環境では Noto Serif JP などへ順に落とす。 */
+            --paper-font: "Paper Yu Mincho", "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Hiragino Mincho Pro", "MS PMincho", "MS Mincho", "Noto Serif JP", serif;
             --gothic-font: "Yu Gothic", "YuGothic", "Hiragino Kaku Gothic ProN", "Meiryo", "Noto Sans JP", sans-serif;
             --title-size: 26pt;
         }
