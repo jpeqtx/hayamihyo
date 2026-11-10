@@ -21,7 +21,8 @@
             --primary-hover: #1d4ed8;
             --border-color: #e5e7eb;
             
-            --paper-font: "Noto Serif JP", "Yu Mincho", "Hiragino Mincho ProN", serif;
+            --paper-font: "Noto Serif JP", "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Hiragino Mincho Pro", "MS PMincho", "MS Mincho", serif;
+            --gothic-font: "Noto Sans JP", "Yu Gothic", "YuGothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
             --title-size: 26pt;
         }
 
@@ -177,10 +178,19 @@
         .a5-page {
             flex: 0 0 148.5mm; width: 148.5mm; min-width: 148.5mm; max-width: 148.5mm;
             height: 210mm; padding: 5mm;
-            font-family: var(--paper-font); color: #000; 
+            font-family: var(--paper-font) !important; color: #000;
             display: flex; flex-direction: column;
             overflow: hidden;
             box-sizing: border-box;
+        }
+
+        /* 紙面フォントの明示（継承まかせにしない）
+           ゴシック体は指定箇所（表の見出し・元号・西暦・注記）だけ。
+           それ以外の紙面要素はすべて明朝体を要素ごとに明示する。 */
+        .a5-page .header-area, .a5-page .main-title, .a5-page .ym-block, .a5-page .legend,
+        .a5-page .header-right, .a5-page .age-table td, .a5-page .cell-age, .a5-page .cell-zodiac,
+        .a5-page .section-title, .a5-page .vertical-list {
+            font-family: var(--paper-font);
         }
 
         /* --- 左ページ：ヘッダー --- */
@@ -289,7 +299,7 @@
         }
         .age-table th {
             border: 1px solid #000; background: #ececec;
-            font-family: sans-serif; font-size: 7.5pt; font-weight: 700;
+            font-family: var(--gothic-font); font-size: 7.5pt; font-weight: 700;
             text-align: center; vertical-align: middle;
             height: 5mm; padding: 0.3mm 0; white-space: nowrap;
         }
@@ -299,15 +309,15 @@
             height: 100%; width: 100%; line-height: 1.1;
         }
 
-        .cell-era { font-size: 7pt; font-weight: 700; font-family: sans-serif; letter-spacing: 0; white-space: nowrap; }
-        .cell-year { font-size: 7pt; font-family: sans-serif; }
+        .cell-era { font-size: 7pt; font-weight: 700; font-family: var(--gothic-font); letter-spacing: 0; white-space: nowrap; }
+        .cell-year { font-size: 7pt; font-family: var(--gothic-font); }
         .cell-age { font-size: 10.5pt; font-weight: 700; margin: 0.3mm 0; }
         .cell-zodiac { font-size: 9pt; letter-spacing: 1px; }
 
         .table-note {
             flex: 0 0 auto;
             margin-top: 0.6mm;
-            font-family: sans-serif;
+            font-family: var(--gothic-font);
             font-size: 7pt;
             line-height: 1.2;
             white-space: nowrap;
